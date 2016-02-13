@@ -1,0 +1,3 @@
+cleandata:
+	rm images/*.data
+
