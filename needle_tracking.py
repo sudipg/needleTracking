@@ -1,3 +1,4 @@
+#!/usr/bin/python
 """
 Needle tracking
 """
@@ -8,17 +9,71 @@ import cv2
 import pdb
 from Tkinter import *
 import tkFileDialog
-import sys
+import argparse
+import random
 
-use_old_file = int(sys.argv[1])
+from color_classifier import is_metallic
 
-filename = 'images/left1004.jpeg'
+verbose = False
+zones = None
+image = None
+img_width = 0
+img_height = 0
 
 
-if not use_old_file:
-	root = Tk()
-	filename = tkFileDialog.askopenfilename(parent = root)
-	root.destroy()
+def main():
+	"""
+	Main function for needle tracker
+	"""
 
-img = misc.imread(filename)
-misc.imshow(img)
+
+	# arg parsing
+	parser = argparse.ArgumentParser(description='Detect needle in images \
+		and plot probability distribution.')
+	parser.add_argument("-i", "--image", type=str, help="input image filename", default=None, required=False)
+	parser.add_argument("-v", "--verbose", help="debug printing enable",
+                    action="store_true")
+	args = parser.parse_args()
+	global verbose 
+	verbose = args.verbose
+	image = None
+	filename = None
+
+	# check if file specified
+	if args.image:
+		filename = args.image
+		try:
+			image = misc.imread(filename)
+			if verbose:
+				print filename
+		except:
+			print 'something wrong with the filename'
+	else:
+		filename = 'images/left1008.jpeg'
+		image = misc.imread(filename)
+
+	if verbose:
+		plt.imshow(image)
+		plt.show()
+
+	img_width = len(image[0])
+	img_height = len(image)
+
+	num_windows = 1e4 # The number of zones of probability
+	global zones 
+	zones = np.zeros(((int)np.sqrt(num_windows),(int)np.sqrt(num_windows))) # set up the zones of distinct probability
+	set_random_p()
+
+
+def 
+
+
+
+def set_random_p():
+	global zones;
+	for i in zones.shape[0]:
+		for j in zones.shape[1]:
+			zones[i,j] = random.random()
+
+if __name__ == '__main__':
+	main()
