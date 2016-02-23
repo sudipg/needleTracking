@@ -2,6 +2,7 @@
 """
 Needle tracking
 """
+from __future__ import division
 import numpy as np
 from scipy import misc, ndimage
 import matplotlib.pyplot as plt 
@@ -19,14 +20,14 @@ zones = None
 image = None
 img_width = 0
 img_height = 0
+p_map = None
+num_windows = 0
 
 
 def main():
 	"""
 	Main function for needle tracker
 	"""
-
-
 	# arg parsing
 	parser = argparse.ArgumentParser(description='Detect needle in images \
 		and plot probability distribution.')
@@ -35,6 +36,10 @@ def main():
                     action="store_true")
 	args = parser.parse_args()
 	global verbose 
+	global image
+	global img_height
+	global img_width
+	global num_windows
 	verbose = args.verbose
 	image = None
 	filename = None
@@ -59,21 +64,55 @@ def main():
 	img_width = len(image[0])
 	img_height = len(image)
 
-	num_windows = 1e4 # The number of zones of probability
+	num_windows = 1e4 # The number of zones of probability must be a perfect square
 	global zones 
-	zones = np.zeros(((int)np.sqrt(num_windows),(int)np.sqrt(num_windows))) # set up the zones of distinct probability
+	zones = np.zeros(((int)(np.sqrt(num_windows)),(int)(np.sqrt(num_windows)))) # set up the zones of distinct probability
 	set_random_p()
+	plot_pixel_map()
 
 
-def 
+def plot_pixel_map():
+	global zones
+	global image 
+	global img_height
+	global img_width
+	generate_pixel_map()
+	plt.imshow(image)
+	plt.imshow(p_map, cmap='Blues',interpolation='nearest', alpha=0.3)
+	plt.show();
 
+def generate_pixel_map():
+	"""
+	generates a map of probabilities that can be overlayed on the image
+	"""
+	global p_map
+	p_map = np.zeros((img_height, img_width))
+	for i in range(img_height):
+		for j in range(img_width):
+			p_map[i,j] = get_pixel_zone(j,i)
+
+def get_pixel_zone(x, y):
+	global num_windows
+	global img_width
+	global img_height
+	tmp1 = img_width/np.sqrt(num_windows)
+	tmp2 = img_height/np.sqrt(num_windows)
+	return zones[y//tmp2,x//tmp1]
+
+
+def normalize_map():
+	global zones
+	zones = zones/zones.sum()
 
 
 def set_random_p():
-	global zones;
-	for i in zones.shape[0]:
-		for j in zones.shape[1]:
+	global zones
+	global image
+
+	for i in range(zones.shape[0]):
+		for j in range(zones.shape[1]):
 			zones[i,j] = random.random()
+	normalize_map()
 
 if __name__ == '__main__':
 	main()
