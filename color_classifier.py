@@ -25,6 +25,7 @@ from sklearn.externals.six import StringIO
 import pydot
 import pickle
 
+mean_new = np.array([ 162.0156658 , 164.57441253 , 145.19843342])
 
 def is_metallic(RGB):
 	"""
@@ -36,5 +37,8 @@ def is_metallic(RGB):
 
 def is_metallic_fast(img_RGB):
 	mean_sample = np.array([ 228.48076923 , 231.34615385 , 229.34615385])
-	tolerance = 40;
-	return np.linalg.norm(img_RGB - mean_sample, axis=2)<=tolerance
+	tolerance = 30;
+	if new_mean:
+		return (np.linalg.norm(img_RGB - mean_new, axis=2)<=tolerance).astype('int')
+	else: 
+		return (np.linalg.norm(img_RGB - mean_sample, axis=2)<=tolerance).astype('int')

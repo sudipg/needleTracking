@@ -6,9 +6,6 @@ from __future__ import division
 import numpy as np
 from scipy import misc, ndimage
 import matplotlib.pyplot as plt 
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
-import cv2
 import pdb
 from Tkinter import *
 import tkFileDialog
@@ -43,6 +40,7 @@ def main():
 	parser = argparse.ArgumentParser(description='Detect needle in images \
 		and plot probability distribution.')
 	parser.add_argument("-i", "--image", type=str, help="input image filename", default=None, required=False)
+	parser.add_argument("-f", "--fineness", type=float, help="number of windows to split into (must be square)", default=1e4, required=False)
 	parser.add_argument("-v", "--verbose", help="debug printing enable",
                     action="store_true")
 	parser.add_argument("-s", "--shape", help="enable ellipse fitting probability calculation",
@@ -78,7 +76,11 @@ def main():
 	img_width = len(image[0])
 	img_height = len(image)
 
-	num_windows = 1e4 # The number of zones of probability must be a perfect square
+	
+	if args.fineness:
+		num_windows = args.fineness
+	else:
+		num_windows = 1e4 # The number of zones of probability must be a perfect square
 	global zones 
 	zones = np.zeros(((int)(np.sqrt(num_windows)),(int)(np.sqrt(num_windows)))) # set up the zones of distinct probability
 	# start off with a uniform probability distribution
@@ -88,6 +90,7 @@ def main():
 	add_metal_segmentation_p()
 	t1 = time.time()
 	print "done metal segmentation in "+str(t1-t0)+" s"
+#	plot_pixel_map()
 	print "starting edges segmentation"
 	add_edge_segmentation_p()
 	t2 = time.time()
@@ -145,9 +148,17 @@ def add_edge_segmentation_p():
 		countour_size = np.count_nonzero(l)
 		if (countour_size > min_contour and countour_size <= max_contour):
 			components.append(l)
+	
+	tmp_contours = []
 	for i in range(len(components)):
-		components[i] = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/3))*255
+	    tmp = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/5))*255
+	    if np.count_nonzero(tmp)>=min_contour*0.4:
+	        tmp_contours.append(tmp)
+	components  = tmp_contours
+
 	edges = sum(components)
+	if np.count_nonzero(edges)<=min_contour*0.3:
+		return
 	
 	if verbose:
 		plt.imshow(edges)
@@ -265,7 +276,9 @@ def plot_pixel_map():
 	global img_height
 	global img_width
 	generate_pixel_map()
-	print "now for 3D!!!"
+	plt.imshow(image)
+	plt.imshow(p_map, cmap='jet',interpolation='nearest', alpha=0.5)
+	plt.show()
 	X = range(img_width)
 	Y = range(img_height)
 	m = mlab.surf(X,Y,p_map, warp_scale='auto', opacity=1)
@@ -276,10 +289,8 @@ def plot_pixel_map():
 	mlab.zlabel('probability')
 	mlab.outline(m)
 	mlab.show()
-	raw_input()
-	plt.imshow(image)
-	plt.imshow(p_map, cmap='jet',interpolation='nearest', alpha=0.5)
-	plt.show()
+	
+	
 	
 
 def plot_components():
