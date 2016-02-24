@@ -12,6 +12,7 @@ from Tkinter import *
 import tkFileDialog
 import argparse
 import random
+from skimage import measure, filters, data
 
 from color_classifier import is_metallic
 
@@ -22,6 +23,7 @@ img_width = 0
 img_height = 0
 p_map = None
 num_windows = 0
+filename = None
 
 
 def main():
@@ -40,6 +42,7 @@ def main():
 	global img_height
 	global img_width
 	global num_windows
+	global filename
 	verbose = args.verbose
 	image = None
 	filename = None
@@ -67,9 +70,81 @@ def main():
 	num_windows = 1e4 # The number of zones of probability must be a perfect square
 	global zones 
 	zones = np.zeros(((int)(np.sqrt(num_windows)),(int)(np.sqrt(num_windows)))) # set up the zones of distinct probability
-	set_random_p()
+	# start off with a uniform probability distribution
+	generate_uniform_p()
+	add_metal_segmentation_p()
+	add_edge_segmentation_p()
 	plot_pixel_map()
 
+
+def add_metal_segmentation_p():
+	global zones
+	global image
+	global img_height
+	global img_width
+
+	metal_zones = np.zeros((zones.shape[0], zones.shape[1]))
+	xs = np.r_[0:img_width:1]
+	ys = np.r_[0:img_height:1]
+	tmp1 = img_width/np.sqrt(num_windows)
+	tmp2 = img_height/np.sqrt(num_windows)
+
+	for x in xs:
+		for y in ys:
+			if is_metallic(image[y,x]):
+				metal_zones[y//tmp2,x//tmp1] += 1
+	metal_zones = metal_zones/metal_zones.sum()
+	zones = zones*metal_zones
+	normalize_map()
+	print zones
+
+def add_edge_segmentation_p():
+	global zones
+	global image
+	global img_height
+	global img_width
+	global filename
+
+	min_contour = img_height/4;
+	max_contour = 2*img_height;
+
+	ROI = filters.sobel(data.imread(filename, as_grey=True))
+	ROI = ROI*(255/ROI.max())
+	binary_ROI = ROI>ROI.max()*0.4
+	labels = measure.label(binary_ROI,connectivity=2)
+	component_numbers = np.unique(labels)
+	components = []
+	area = len(ROI)*len(ROI[0])
+	for i in component_numbers:
+	    if np.count_nonzero(labels == i)>min_contour and np.count_nonzero(labels == i)<=max_contour:
+	        components.append((labels == i)*255)
+	for i in range(len(components)):
+		components[i] = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/3))*255
+	edges = sum(components)
+	
+	if verbose:
+		plt.imshow(edges)
+		plt.show()
+
+	edge_zones = np.zeros((zones.shape[0], zones.shape[1]))
+	xs = np.r_[0:img_width:1]
+	ys = np.r_[0:img_height:1]
+	tmp1 = img_width/np.sqrt(num_windows)
+	tmp2 = img_height/np.sqrt(num_windows)
+
+	for x in xs:
+		for y in ys:
+			if edges[y,x]:
+				edge_zones[y//tmp2,x//tmp1] += 1
+	edge_zones = edge_zones/edge_zones.sum()
+	zones = zones*edge_zones
+	normalize_map()
+	print zones
+
+
+############################
+#### HELPER FUNCTIONS ######
+############################
 
 def plot_pixel_map():
 	global zones
@@ -78,7 +153,7 @@ def plot_pixel_map():
 	global img_width
 	generate_pixel_map()
 	plt.imshow(image)
-	plt.imshow(p_map, cmap='Blues',interpolation='nearest', alpha=0.3)
+	plt.imshow(p_map, cmap='seismic',interpolation='nearest', alpha=0.6)
 	plt.show();
 
 def generate_pixel_map():
@@ -112,6 +187,12 @@ def set_random_p():
 	for i in range(zones.shape[0]):
 		for j in range(zones.shape[1]):
 			zones[i,j] = random.random()
+	normalize_map()
+
+def generate_uniform_p():
+	global zones
+	global image
+	zones = np.ones((zones.shape[0], zones.shape[1]));
 	normalize_map()
 
 if __name__ == '__main__':
