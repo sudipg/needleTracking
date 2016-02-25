@@ -133,32 +133,43 @@ def add_edge_segmentation_p():
 	global filename
 	global components
 
-	min_contour = img_height/2.5;
-	max_contour = 3*img_height;
+	N = 2.5
 
+	
 	ROI = filters.sobel(data.imread(filename, as_grey=True))
 	ROI = ROI*(255/ROI.max())
-	binary_ROI = ROI>ROI.max()*0.4
-	labels = measure.label(binary_ROI,connectivity=2)
-	component_numbers = np.unique(labels)
-	components = []
-	area = len(ROI)*len(ROI[0])
-	for i in component_numbers:
-		l = labels==i
-		countour_size = np.count_nonzero(l)
-		if (countour_size > min_contour and countour_size <= max_contour):
-			components.append(l)
-	
-	tmp_contours = []
-	for i in range(len(components)):
-	    tmp = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/5))*255
-	    if np.count_nonzero(tmp)>=min_contour*0.4:
-	        tmp_contours.append(tmp)
-	components  = tmp_contours
+	mlab.surf(ROI)
+	mlab.show()
 
-	edges = sum(components)
-	if np.count_nonzero(edges)<=min_contour*0.3:
-		return
+	while N<100:
+		min_contour = img_height/N;
+		max_contour = N*img_height;
+		binary_ROI = ROI>ROI.max()*(0.4-N/50)
+		labels = measure.label(binary_ROI,connectivity=2)
+		component_numbers = np.unique(labels)
+		components = []
+		area = len(ROI)*len(ROI[0])
+		for i in component_numbers:
+			l = labels==i
+			countour_size = np.count_nonzero(l)
+			if (countour_size > min_contour and countour_size <= max_contour):
+				components.append(l)
+		
+		if N>4:
+			tmp_contours = []
+			for i in range(len(components)):
+			    tmp = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/5))*255
+			    if np.count_nonzero(tmp)>=min_contour*0.4:
+			        tmp_contours.append(tmp)
+			components  = tmp_contours
+
+		edges = sum(components)
+		if np.count_nonzero(edges)<=min_contour*0.3:
+			print 'NIL edges '+ str(np.count_nonzero(edges))
+			N+=0.7
+		else:
+			print 'enough edges found'
+			break
 	
 	if verbose:
 		plt.imshow(edges)
