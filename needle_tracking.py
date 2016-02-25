@@ -45,6 +45,7 @@ def main():
 	parser.add_argument("-i", "--image", type=str, help="input image filename", default=None, required=False)
 	parser.add_argument("-v", "--verbose", help="debug printing enable",
                     action="store_true")
+	parser.add_argument("-f", "--fineness", type=float, help="number of windows to split into (must be square)", default=1e4, required=False)
 	parser.add_argument("-s", "--shape", help="enable ellipse fitting probability calculation",
                     action="store_true")
 	args = parser.parse_args()
