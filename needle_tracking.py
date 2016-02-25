@@ -133,8 +133,8 @@ def add_edge_segmentation_p():
 	global filename
 	global components
 
-	min_contour = img_height/4;
-	max_contour = 2*img_height;
+	min_contour = img_height/2.5;
+	max_contour = 3*img_height;
 
 	ROI = filters.sobel(data.imread(filename, as_grey=True))
 	ROI = ROI*(255/ROI.max())
