@@ -265,6 +265,9 @@ def plot_pixel_map():
 	global img_height
 	global img_width
 	generate_pixel_map()
+	plt.imshow(image)
+	plt.imshow(p_map, cmap='jet',interpolation='nearest', alpha=0.5)
+	plt.show()
 	print "now for 3D!!!"
 	X = range(img_width)
 	Y = range(img_height)
@@ -276,10 +279,6 @@ def plot_pixel_map():
 	mlab.zlabel('probability')
 	mlab.outline(m)
 	mlab.show()
-	raw_input()
-	plt.imshow(image)
-	plt.imshow(p_map, cmap='jet',interpolation='nearest', alpha=0.5)
-	plt.show()
 	
 
 def plot_components():
