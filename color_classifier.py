@@ -35,7 +35,7 @@ def is_metallic(RGB):
 	tolerance = 35;
 	return np.linalg.norm(np.array(RGB) - mean_sample) <= tolerance
 
-def is_metallic_fast(img_RGB):
+def is_metallic_fast(img_RGB, new_mean=0):
 	mean_sample = np.array([ 228.48076923 , 231.34615385 , 229.34615385])
 	tolerance = 30;
 	if new_mean:
