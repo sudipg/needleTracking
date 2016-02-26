@@ -21,10 +21,12 @@ import b2ac.preprocess
 import b2ac.fit
 import b2ac.conversion
 from skimage.draw import ellipse_perimeter
+import copy
 
 verbose = False
 zones = None
 image = None
+image_BW = None
 img_width = 0
 img_height = 0
 p_map = None
@@ -52,6 +54,7 @@ def main():
 	global img_width
 	global num_windows
 	global filename
+	global image_BW
 	verbose = args.verbose
 	image = None
 	filename = None
@@ -61,6 +64,7 @@ def main():
 		filename = args.image
 		try:
 			image = misc.imread(filename)
+			image_BW = data.imread(filename, as_grey=True)
 			if verbose:
 				print filename
 		except:
@@ -68,6 +72,7 @@ def main():
 	else:
 		filename = 'images/left1008.jpeg'
 		image = misc.imread(filename)
+		image_BW = data.imread(filename, as_grey=True)
 
 	if verbose:
 		plt.imshow(image)
@@ -92,14 +97,15 @@ def main():
 	print "done metal segmentation in "+str(t1-t0)+" s"
 #	plot_pixel_map()
 	print "starting edges segmentation"
-	add_edge_segmentation_p()
 	t2 = time.time()
-	print "done edge segmentation in "+str(t2-t1)+" s"
+	add_edge_segmentation_p()
+	t3 = time.time()
+	print "done edge segmentation in "+str(t3-t2)+" s"
 	if args.shape:
 		print "starting ellipse fitting segmentation"
 		add_ellipse_segmentation_p()
-		t3 = time.time()
-		print "done ellipse fitting segmentation in "+str(t3-t2)+" s"
+		t4 = time.time()
+		print "done ellipse fitting segmentation in "+str(t4-t3)+" s"
 	plot_pixel_map()
 	if verbose:
 		plot_components()
@@ -132,44 +138,45 @@ def add_edge_segmentation_p():
 	global img_width
 	global filename
 	global components
+	global image_BW
 
-	N = 2.5
-
-	
-	ROI = filters.sobel(data.imread(filename, as_grey=True))
+		# trying to sharpen the image 
+	blurred_img = filters.gaussian_filter(image_BW, sigma=3)
+	aprx_laplacian = filters.gaussian_filter(blurred_img,1)
+	alpha = 30
+	sharpened_img = blurred_img + alpha * (blurred_img - aprx_laplacian)
+	sharpened_img = ndimage.median_filter(sharpened_img, (10,10))
+	edges2 = filters.sobel(sharpened_img)
+	ROI = copy.copy(edges2)
 	ROI = ROI*(255/ROI.max())
-	mlab.surf(ROI)
-	mlab.show()
+	binary_ROI = ROI>ROI.max()*0.07
+	if verbose:
+		mlab.surf(ROI, warp_scale = 'auto')
+		mlab.show()
 
-	while N<100:
-		min_contour = img_height/N;
-		max_contour = N*img_height;
-		binary_ROI = ROI>ROI.max()*(0.4-N/50)
-		labels = measure.label(binary_ROI,connectivity=2)
-		component_numbers = np.unique(labels)
-		components = []
-		area = len(ROI)*len(ROI[0])
-		for i in component_numbers:
-			l = labels==i
-			countour_size = np.count_nonzero(l)
-			if (countour_size > min_contour and countour_size <= max_contour):
-				components.append(l)
-		
-		if N>4:
-			tmp_contours = []
-			for i in range(len(components)):
-			    tmp = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/5))*255
-			    if np.count_nonzero(tmp)>=min_contour*0.4:
-			        tmp_contours.append(tmp)
-			components  = tmp_contours
+	N=10
+	min_contour = img_height/N;
+	max_contour = N*img_height;
+	labels = measure.label(binary_ROI,connectivity=2)
+	component_numbers = np.unique(labels)
+	components = []
+	area = len(ROI)*len(ROI[0])
+	for i in component_numbers:
+		l = labels==i
+		countour_size = np.count_nonzero(l)
+		if (countour_size > min_contour and countour_size <= max_contour):
+			components.append(l)
+	
+	tmp_contours = []
+	for i in range(len(components)):
+	    tmp = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/10))*255
+	    if np.count_nonzero(tmp)>=min_contour*0.4:
+	        tmp_contours.append(tmp)
+	components  = tmp_contours
 
-		edges = sum(components)
-		if np.count_nonzero(edges)<=min_contour*0.3:
-			print 'NIL edges '+ str(np.count_nonzero(edges))
-			N+=0.7
-		else:
-			print 'enough edges found'
-			break
+	edges = sum(components)
+	if(edges.sum==0):
+		return
 	
 	if verbose:
 		plt.imshow(edges)
