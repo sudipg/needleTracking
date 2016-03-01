@@ -154,27 +154,28 @@ def add_edge_segmentation_p():
 		mlab.surf(ROI, warp_scale = 'auto')
 		mlab.show()
 
-	N=10
-	min_contour = img_height/N;
-	max_contour = N*img_height;
-	labels = measure.label(binary_ROI,connectivity=2)
-	component_numbers = np.unique(labels)
-	components = []
-	area = len(ROI)*len(ROI[0])
-	for i in component_numbers:
-		l = labels==i
-		countour_size = np.count_nonzero(l)
-		if (countour_size > min_contour and countour_size <= max_contour):
-			components.append(l)
+	# N=10
+	# min_contour = img_height/N;
+	# max_contour = N*img_height;
+	# labels = measure.label(binary_ROI,connectivity=2)
+	# component_numbers = np.unique(labels)
+	# components = []
+	# area = len(ROI)*len(ROI[0])
+	# for i in component_numbers:
+	# 	l = labels==i
+	# 	countour_size = np.count_nonzero(l)
+	# 	if (countour_size > min_contour and countour_size <= max_contour):
+	# 		components.append(l)
 	
-	tmp_contours = []
-	for i in range(len(components)):
-	    tmp = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/10))*255
-	    if np.count_nonzero(tmp)>=min_contour*0.4:
-	        tmp_contours.append(tmp)
-	components  = tmp_contours
+	# tmp_contours = []
+	# for i in range(len(components)):
+	#     tmp = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/10))*255
+	#     if np.count_nonzero(tmp)>=min_contour*0.4:
+	#         tmp_contours.append(tmp)
+	# components  = tmp_contours
 
-	edges = sum(components)
+	# edges = sum(components)
+	edges = binary_ROI
 	if(edges.sum==0):
 		return
 	
