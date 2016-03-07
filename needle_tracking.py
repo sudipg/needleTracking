@@ -11,7 +11,7 @@ from Tkinter import *
 import tkFileDialog
 import argparse
 import random
-from skimage import measure, filters, data
+from skimage import measure, filters, data, feature
 from mayavi import mlab
 from color_classifier import is_metallic, is_metallic_fast
 import pygame
@@ -44,9 +44,9 @@ def main():
 	parser.add_argument("-i", "--image", type=str, help="input image filename", default=None, required=False)
 	parser.add_argument("-f", "--fineness", type=float, help="number of windows to split into (must be square)", default=1e4, required=False)
 	parser.add_argument("-v", "--verbose", help="debug printing enable",
-                    action="store_true")
+					action="store_true")
 	parser.add_argument("-s", "--shape", help="enable ellipse fitting probability calculation",
-                    action="store_true")
+					action="store_true")
 	args = parser.parse_args()
 	global verbose 
 	global image
@@ -95,12 +95,13 @@ def main():
 	add_metal_segmentation_p()
 	t1 = time.time()
 	print "done metal segmentation in "+str(t1-t0)+" s"
-#	plot_pixel_map()
+	#plot_pixel_map()
 	print "starting edges segmentation"
 	t2 = time.time()
 	add_edge_segmentation_p()
 	t3 = time.time()
 	print "done edge segmentation in "+str(t3-t2)+" s"
+	#plot_pixel_map()
 	if args.shape:
 		print "starting ellipse fitting segmentation"
 		add_ellipse_segmentation_p()
@@ -122,7 +123,7 @@ def add_metal_segmentation_p():
 	ys = np.r_[0:img_height:2]
 	tmp1 = img_width/np.sqrt(num_windows)
 	tmp2 = img_height/np.sqrt(num_windows)
-	metal_mask = is_metallic_fast(image)
+	metal_mask = is_metallic_fast(image, new_mean = 1)
 	for x in xs:
 		for y in ys:
 			if metal_mask[y,x]:
@@ -141,59 +142,41 @@ def add_edge_segmentation_p():
 	global image_BW
 
 		# trying to sharpen the image 
-	blurred_img = filters.gaussian_filter(image_BW, sigma=3)
-	aprx_laplacian = filters.gaussian_filter(blurred_img,1)
-	alpha = 30
-	sharpened_img = blurred_img + alpha * (blurred_img - aprx_laplacian)
-	sharpened_img = ndimage.median_filter(sharpened_img, (10,10))
-	edges2 = filters.sobel(sharpened_img)
-	ROI = copy.copy(edges2)
-	ROI = ROI*(255/ROI.max())
-	binary_ROI = ROI>ROI.max()*0.07
-	if verbose:
-		mlab.surf(ROI, warp_scale = 'auto')
-		mlab.show()
+	edge_max = filters.sobel(image_BW).max()
+	edges = feature.canny(image_BW, sigma = 3, low_threshold=0.85*edge_max, high_threshold=1.1*edge_max)
+	# try to kill smaller components
+	labelled_img = measure.label(edges, connectivity=2)
 
-	# N=10
-	# min_contour = img_height/N;
-	# max_contour = N*img_height;
-	# labels = measure.label(binary_ROI,connectivity=2)
-	# component_numbers = np.unique(labels)
-	# components = []
-	# area = len(ROI)*len(ROI[0])
-	# for i in component_numbers:
-	# 	l = labels==i
-	# 	countour_size = np.count_nonzero(l)
-	# 	if (countour_size > min_contour and countour_size <= max_contour):
-	# 		components.append(l)
-	
-	# tmp_contours = []
-	# for i in range(len(components)):
-	#     tmp = (filters.gaussian_filter(components[i].astype('float'), sigma=3)>(components[i].max()/10))*255
-	#     if np.count_nonzero(tmp)>=min_contour*0.4:
-	#         tmp_contours.append(tmp)
-	# components  = tmp_contours
+	num_components = labelled_img.max()
+	print num_components
+	components = []
+	for i in range(num_components):
+		component = (labelled_img == i).astype('int')
+		size =  np.count_nonzero(component)
+		components.append((component,size))
+	components = sorted(components, key=lambda x: -x[1])
+	# now lets take the biggest max(4, len(components)) components
+	num_components = min(10, len(components))
+	components = components[1:num_components]
 
-	# edges = sum(components)
-	edges = binary_ROI
-	if(edges.sum==0):
-		return
-	
+	components = [components[i][0] for i in range(len(components))]
+	components_sum = sum(components)
+
 	if verbose:
-		plt.imshow(edges)
+		plt.imshow(components_sum)
 		plt.show()
 
 	edge_zones = np.zeros((zones.shape[0], zones.shape[1]))
-	xs = np.r_[0:img_width:2]
-	ys = np.r_[0:img_height:2]
+	xs = np.r_[0:img_width:1]
+	ys = np.r_[0:img_height:1]
 	tmp1 = img_width/np.sqrt(num_windows)
 	tmp2 = img_height/np.sqrt(num_windows)
 
 	for x in xs:
 		for y in ys:
-			if edges[y,x]:
+			if components_sum[y,x]:
 				edge_zones[y//tmp2,x//tmp1] += 1
-	edge_zones = edge_zones/edge_zones.sum()
+	edge_zones = edge_zones**2/edge_zones.sum()
 	zones = zones*edge_zones
 	normalize_map()
 
@@ -204,82 +187,88 @@ def add_ellipse_segmentation_p():
 	global img_height
 	global img_width
 
-	acceptable_A = 103
-	acceptable_B = 75
+	acceptable_A = 300
+	acceptable_B = 150
 
 	ellipse_zones = np.zeros((zones.shape[0], zones.shape[1]))
 
+
 	for target in range(len(components)):
-	    y,x = np.nonzero(components[target])
-	    x = x[::5]
-	    y = y[::5]
-	    if verbose:
-		    plt.imshow(components[target], cmap='gray')
-		    plt.title('Sampling the component')
-		    plt.show()
-	    data = np.array([[x[i], y[i]] for i in range(len(x))])
-	    pca = decomposition.PCA(n_components=2)
-	    pca.fit(data)
-	    data2 = pca.transform(data)
-	    if verbose:
-	    	plt.plot(data2[:,0],data2[:,1],'r+')
-	    data2 = list(data2)
-	    data2.sort(key=lambda x:x[0])
-	    data2 = np.array(data2)
-	    if verbose:
-	    	plt.plot(data2[:,0],data2[:,1],'r+')
+		try:
+			y,x = np.nonzero(components[target])
+			x = x[::5]
+			y = y[::5]
+			if verbose:
+				plt.imshow(components[target], cmap='gray')
+				plt.title('Sampling the component')
+				plt.show()
+			data = np.array([[x[i], y[i]] for i in range(len(x))])
+			pca = decomposition.PCA(n_components=2)
+			pca.fit(data)
+			data2 = pca.transform(data)
+			if verbose:
+				plt.plot(data2[:,0],data2[:,1],'r+')
+			data2 = list(data2)
+			data2.sort(key=lambda x:x[0])
+			data2 = np.array(data2)
+			if verbose:
+				plt.plot(data2[:,0],data2[:,1],'r+')
 
-	    # get average pcaY for each window
-	    num_groups = 10
-	    size_of_group = len(data2)//num_groups
-	    if verbose:
-		    print len(data2)
-		    print size_of_group
-	    data2 = data2[:num_groups*size_of_group]
-	    if verbose:
-	    	print len(data2)
-	    groups = np.split(data2, num_groups)
-	    pcaY = []
-	    pcaX = []
-	    for group in groups:
-	        pcaY.append(np.mean(group[:,1]))
-	        pcaX.append(np.mean(group[:,0]))
-	    if verbose:
-	    	plt.plot(pcaX, pcaY, 'bo')
-	    	plt.show()
-	    pcaX = np.array(pcaX)
-	    pcaY = np.array(pcaY)
-	    pcaData = np.vstack((pcaX, pcaY)).transpose()
-	    invPcaData = pca.inverse_transform(pcaData)
-	    points, x_mean, y_mean = b2ac.preprocess.remove_mean_values(invPcaData)
-	    points = np.array(points)
-	    conic_numpy = b2ac.fit.fit_improved_B2AC_double(points)
-	    general_form_numpy = b2ac.conversion.conic_to_general_1(conic_numpy)
-	    general_form_numpy[0][0] += x_mean
-	    general_form_numpy[0][1] += y_mean
-	    A = general_form_numpy[1][1]
-	    B = general_form_numpy[1][0]
+			# get average pcaY for each window
+			num_groups = 10
+			size_of_group = len(data2)//num_groups
+			if verbose:
+				print len(data2)
+				print size_of_group
+			data2 = data2[:num_groups*size_of_group]
+			if verbose:
+				print len(data2)
+			groups = np.split(data2, num_groups)
+			pcaY = []
+			pcaX = []
 
-	    dist_from_acceptable = np.linalg.norm(np.array([A,B]) - np.array([acceptable_A,acceptable_B]))
-	    weight = 1/dist_from_acceptable
+			for group in groups:
+				if group.size == 0:
+					continue
+				pcaY.append(np.mean(group[:,1]))
+				pcaX.append(np.mean(group[:,0]))
+			if verbose:
+				plt.plot(pcaX, pcaY, 'bo')
+				plt.show()
+			pcaX = np.array(pcaX)
+			pcaY = np.array(pcaY)
+			pcaData = np.vstack((pcaX, pcaY)).transpose()
+			invPcaData = pca.inverse_transform(pcaData)
+			points, x_mean, y_mean = b2ac.preprocess.remove_mean_values(invPcaData)
+			points = np.array(points)
+			conic_numpy = b2ac.fit.fit_improved_B2AC_double(points)
+			general_form_numpy = b2ac.conversion.conic_to_general_1(conic_numpy)
+			general_form_numpy[0][0] += x_mean
+			general_form_numpy[0][1] += y_mean
+			A = general_form_numpy[1][1]
+			B = general_form_numpy[1][0]
 
-	    xs = np.r_[0:img_width:2]
-	    ys = np.r_[0:img_height:2]
-	    tmp1 = img_width/np.sqrt(num_windows)
-	    tmp2 = img_height/np.sqrt(num_windows)
-	    for x in xs:
-	    	for y in ys:
-	    		if components[target][y,x]:
-	    			ellipse_zones[y//tmp2,x//tmp1] += weight
+			dist_from_acceptable = np.linalg.norm(np.array([A,B]) - np.array([acceptable_A,acceptable_B]))
+			weight = 1/dist_from_acceptable
+
+			xs = np.r_[0:img_width:1]
+			ys = np.r_[0:img_height:1]
+			tmp1 = img_width/np.sqrt(num_windows)
+			tmp2 = img_height/np.sqrt(num_windows)
+			for x in xs:
+				for y in ys:
+					if components[target][y,x]:
+						ellipse_zones[y//tmp2,x//tmp1] += weight**2
 
 
-	    if verbose:
-	    	print general_form_numpy
-	    	plt.imshow(components[target], cmap='gray')
-	    	plt.plot(cx,cy, 'r+')
-	    	plt.plot(invPcaData[:,0],invPcaData[:,1],'bo')
-	    	plt.show()
-
+			if verbose:
+				print general_form_numpy
+				plt.imshow(components[target], cmap='gray')
+				plt.plot(cx,cy, 'r+')
+				plt.plot(invPcaData[:,0],invPcaData[:,1],'bo')
+				plt.show()
+		except Exception:
+			continue
 	ellipse_zones = ellipse_zones/ellipse_zones.sum()
 	zones = zones*ellipse_zones
 	normalize_map()
