@@ -34,6 +34,78 @@ num_windows = 0
 filename = None
 global components
 
+
+def validate_image(image_filename, validation_filename, fineness=1e4, verbose=False):
+	"""
+	Take an image filename as an input an return the score of validation procedure
+	"""
+	global image
+	global img_height
+	global img_width
+	global num_windows
+	global filename
+	global image_BW
+	global zones
+	global p_map
+
+	#pdb.set_trace()
+
+	num_windows = fineness
+	image = misc.imread(image_filename)
+	image_BW = data.imread(image_filename, as_grey=True)
+	# clean the existing pmap
+	img_width = len(image[0])
+	img_height = len(image)
+	zones = np.zeros(((int)(np.sqrt(num_windows)),(int)(np.sqrt(num_windows))))
+	generate_uniform_p()
+	add_metal_segmentation_p()
+	add_edge_segmentation_p()
+
+	if(verbose):
+		plot_pixel_map();
+
+	# read the validation file and build validation matrix
+	# val_coords holds a list of all the x, y coords of points labeled as a needle
+	v_file = open(validation_filename)
+	val_coords = filter(lambda x: x!='', v_file.read().split('\n'))
+	val_map = np.zeros((np.sqrt(fineness), np.sqrt(fineness)))
+	v_file.close()
+	tmp1 = img_width/np.sqrt(num_windows)
+	tmp2 = img_height/np.sqrt(num_windows)
+
+	pixel_val_map = np.zeros((img_height, img_width))
+
+	for coord in val_coords:
+		coord = coord.split(',')
+		x = int(coord[0])
+		y = int(coord[1])
+		pixel_val_map[y,x] = 1
+
+	pixel_val_map = filters.gaussian_filter(pixel_val_map, 0.5)
+	#pixel_val_map = pixel_val_map > pixel_val_map.max()*0.2
+
+	for x in range(img_width):
+		for y in range(img_height):
+			if(pixel_val_map[y,x]):
+				val_map[y//tmp2,x//tmp1] += 1
+	val_map = (val_map > 0).astype('float')
+	needle_locs = (zones > zones.mean())
+	if(verbose):
+		plt.clf()
+		plt.subplot('311')
+		plt.imshow(needle_locs, cmap='gray')
+		plt.subplot('312')
+		plt.imshow(val_map, cmap='gray')
+		plt.subplot('313')
+		plt.imshow(image)
+		plt.show()
+	return (val_map*needle_locs.astype('int')).sum()/val_map.sum(), (needle_locs.sum() - (val_map*needle_locs.astype('int')).sum())/val_map.sum()
+
+
+
+
+
+
 def main():
 	"""
 	Main function for needle tracker
@@ -143,12 +215,12 @@ def add_edge_segmentation_p():
 
 		# trying to sharpen the image 
 	edge_max = filters.sobel(image_BW).max()
-	edges = feature.canny(image_BW, sigma = 3, low_threshold=0.85*edge_max, high_threshold=1.1*edge_max)
+	edges = feature.canny(image_BW, sigma = 3, low_threshold=0.95*edge_max, high_threshold=1.2*edge_max)
 	# try to kill smaller components
 	labelled_img = measure.label(edges, connectivity=2)
 
 	num_components = labelled_img.max()
-	print num_components
+	#print num_components
 	components = []
 	for i in range(num_components):
 		component = (labelled_img == i).astype('int')
@@ -352,3 +424,6 @@ def generate_uniform_p():
 
 if __name__ == '__main__':
 	main()
+
+
+		
