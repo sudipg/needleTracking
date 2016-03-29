@@ -35,7 +35,7 @@ filename = None
 global components
 
 
-def validate_image(image_filename, validation_filename, fineness=1e4, verbose=False):
+def validate_image(image_filename, validation_filename, fineness=1e4, verbose=False, probability_threshold = 0.1):
 	"""
 	Take an image filename as an input an return the score of validation procedure
 	"""
@@ -89,7 +89,7 @@ def validate_image(image_filename, validation_filename, fineness=1e4, verbose=Fa
 			if(pixel_val_map[y,x]):
 				val_map[y//tmp2,x//tmp1] += 1
 	val_map = (val_map > 0).astype('float')
-	needle_locs = (zones > zones.mean())
+	needle_locs = (zones > zones.mean()*probability_threshold)
 	if(verbose):
 		plt.clf()
 		plt.subplot('311')
@@ -167,19 +167,19 @@ def main():
 	add_metal_segmentation_p()
 	t1 = time.time()
 	print "done metal segmentation in "+str(t1-t0)+" s"
-	#plot_pixel_map()
+	plot_pixel_map()
 	print "starting edges segmentation"
 	t2 = time.time()
 	add_edge_segmentation_p()
 	t3 = time.time()
 	print "done edge segmentation in "+str(t3-t2)+" s"
-	#plot_pixel_map()
+	plot_pixel_map()
 	if args.shape:
 		print "starting ellipse fitting segmentation"
 		add_ellipse_segmentation_p()
 		t4 = time.time()
 		print "done ellipse fitting segmentation in "+str(t4-t3)+" s"
-	plot_pixel_map()
+	#plot_pixel_map()
 	if verbose:
 		plot_components()
 
@@ -191,8 +191,8 @@ def add_metal_segmentation_p():
 	global img_width
 
 	metal_zones = np.zeros((zones.shape[0], zones.shape[1]))
-	xs = np.r_[0:img_width:2]
-	ys = np.r_[0:img_height:2]
+	xs = np.r_[0:img_width:1]
+	ys = np.r_[0:img_height:1]
 	tmp1 = img_width/np.sqrt(num_windows)
 	tmp2 = img_height/np.sqrt(num_windows)
 	metal_mask = is_metallic_fast(image, new_mean = 1)
@@ -214,29 +214,30 @@ def add_edge_segmentation_p():
 	global image_BW
 
 		# trying to sharpen the image 
-	edge_max = filters.sobel(image_BW).max()
-	edges = feature.canny(image_BW, sigma = 3, low_threshold=0.95*edge_max, high_threshold=1.2*edge_max)
-	# try to kill smaller components
-	labelled_img = measure.label(edges, connectivity=2)
+	# edge_max = filters.sobel(image_BW).max()
+	# img_blurred = filters.gaussian_filter(image_BW, sigma=2)
+	edges = feature.canny(image_BW)
+	# # try to kill smaller components
+	# labelled_img = measure.label(edges, connectivity=2)
 
-	num_components = labelled_img.max()
-	#print num_components
-	components = []
-	for i in range(num_components):
-		component = (labelled_img == i).astype('int')
-		size =  np.count_nonzero(component)
-		components.append((component,size))
-	components = sorted(components, key=lambda x: -x[1])
-	# now lets take the biggest max(4, len(components)) components
-	num_components = min(10, len(components))
-	components = components[1:num_components]
+	# num_components = labelled_img.max()
+	# #print num_components
+	# components = []
+	# for i in range(num_components):
+	# 	component = (labelled_img == i).astype('int')
+	# 	size =  np.count_nonzero(component)
+	# 	components.append((component,size))
+	# components = sorted(components, key=lambda x: -x[1])
+	# # now lets take the biggest max(4, len(components)) components
+	# num_components = min(10, len(components))
+	# components = components[1:num_components]
 
-	components = [components[i][0] for i in range(len(components))]
-	components_sum = sum(components)
+	# components = [components[i][0] for i in range(len(components))]
+	# components_sum = sum(components)
 
-	if verbose:
-		plt.imshow(components_sum)
-		plt.show()
+	# if verbose:
+	# 	plt.imshow(components_sum)
+	# 	plt.show()
 
 	edge_zones = np.zeros((zones.shape[0], zones.shape[1]))
 	xs = np.r_[0:img_width:1]
@@ -246,7 +247,7 @@ def add_edge_segmentation_p():
 
 	for x in xs:
 		for y in ys:
-			if components_sum[y,x]:
+			if edges[y,x]:
 				edge_zones[y//tmp2,x//tmp1] += 1
 	edge_zones = edge_zones**2/edge_zones.sum()
 	zones = zones*edge_zones

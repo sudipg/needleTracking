@@ -18,9 +18,13 @@ def main():
 		and evaulate probability distribution. generate a score for the given \
 		hyper paramters')
 	parser.add_argument("-d", "--dir", type=str, help="test directory",default="images/", required=False)
+	parser.add_argument("-f", "--fineness", type=int, help="fineness",default=1e4, required=False)
+	parser.add_argument("-p", "--probability_threshold", type=float, help="fineness",default=1.5e-2, required=False)
 	parser.add_argument("-v", "--verbose", help="debug printing enable", action="store_true")
 	args = parser.parse_args()
 	test_directory = args.dir
+	fineness = args.fineness
+	pt = args.probability_threshold
 	verbose = args.verbose
 	print "The test directory is "+str(test_directory)
 	# gather images
@@ -39,11 +43,12 @@ def main():
 		validation_filename = image_name+'.needle_data'
 		if glob.glob(validation_filename):
 			print("working on :"+validation_filename)
-			scores[image_filename] = validate_image(image_filename, validation_filename, fineness = 50*50, verbose=verbose)
+			scores[image_filename] = validate_image(image_filename, validation_filename, fineness = fineness, verbose=verbose, probability_threshold = pt)
 	print scores
 	plt.figure()
 	plt.bar(range(len(scores)), [value[0] for value in scores.values()], 0.3,color='b')
 	plt.bar(np.array(range(len(scores)))+0.3, [value[1] for value in scores.values()], 0.3,color='r')
+	plt.grid()
 	plt.show()
 	
 if __name__ == '__main__':
